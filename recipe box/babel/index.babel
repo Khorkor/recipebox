@@ -1,0 +1,421 @@
+
+console.clear();
+const Component = React.Component;
+const itemName = 'recipeBox_recipes';
+
+const DEFAULT_RECIPES = {
+  "1": {
+    "id": 1,
+    "name": "Pumpkin Pie",
+    "ingredients": [
+      "Pumpkin Puree",
+      "Sweetened Condensed Milk",
+      "Eggs",
+      "Pumpkin Pie Spice",
+      "Pie Crust"
+    ]
+  },
+  "2": {
+    "id": 2,
+    "name": "Spaghetti",
+    "ingredients": [
+      "Noodles",
+      "Tomato Sauce",
+      "(Optional) Meatballs"
+    ]
+  },
+  "3": {
+    "id": 3,
+    "name": "Onion Pie",
+    "ingredients": [
+      "Onion",
+      "Pie Crust",
+      "Chicken Soup Stock"
+    ]
+  }
+};
+
+
+class App extends Component {
+  constructor(props) {
+    super(props);
+    const recipes = [];
+    
+    let recipeData = {};
+    if (localStorage.getItem(itemName)) {
+      recipeData = JSON.parse(localStorage.getItem(itemName));
+    } else {
+      localStorage.setItem(itemName, JSON.stringify(DEFAULT_RECIPES));
+      recipeData = DEFAULT_RECIPES;
+    }
+    
+    this.state = {
+      recipes: recipeData,
+      activeRecipe: null,
+      warningAction: { name: '', description: '', function: null },
+    };
+    
+    this.onClickRecipe = this.onClickRecipe.bind(this);
+    this.onUpdateRecipe = this.onUpdateRecipe.bind(this);
+    this.onReset = this.onReset.bind(this);
+    this.resetRecipes = this.resetRecipes.bind(this);
+    this.addRecipe = this.addRecipe.bind(this);
+    this.onDeleteRecipe = this.onDeleteRecipe.bind(this);
+    this.deleteRecipe = this.deleteRecipe.bind(this);
+  }
+  
+  componentDidUpdate() {
+    localStorage.setItem(itemName, JSON.stringify(this.state.recipes));
+  }
+  
+  onClickRecipe(e) {
+    const id = e.currentTarget.dataset.id;
+    if (e.target.nodeName == 'H2' && this.state.activeRecipe == id) {
+      this.setState({activeRecipe: null});
+    } else {
+      this.setState({activeRecipe: e.currentTarget.dataset.id});
+    }
+  }
+  
+  onUpdateRecipe(e) {
+    e.preventDefault();
+    const id = this.state.activeRecipe;
+    const currentRecipe = this.state.recipes[id];
+    const action = e.currentTarget.dataset.action;
+    
+    let name = currentRecipe.name;
+    let ingredients = currentRecipe.ingredients.slice();
+    
+    switch (action) {
+      case 'updateName':
+        name = e.target.value;
+        break;
+      case 'deleteIngredient':
+        ingredients.splice(e.currentTarget.dataset.index, 1);
+        break;
+      case 'addIngredient':
+        const ingredient = e.currentTarget.querySelector('input');
+        if (ingredient.value.match(/^\s*$/) == null) {
+          ingredients.push(ingredient.value);
+          ingredient.value = '';
+        }
+        break;
+      default:
+        break;
+    }
+    
+    const newRecipe = Object.assign({},this.state.recipes[id], {name, ingredients});
+    const recipes = Object.assign({}, this.state.recipes, {[id]: newRecipe});
+    this.setState({ recipes });
+  }
+  
+  onReset(e) {
+    const warningAction = {
+      name: 'Reset Recipes',
+      description: 'reset all recipes to the original defaults and destroy any changes or additions',
+      function: this.resetRecipes,
+    }
+    this.setState({ warningAction });
+    
+    $('#WarningModal').modal('show');
+  }
+  
+  resetRecipes() {
+    localStorage.setItem(itemName, JSON.stringify(DEFAULT_RECIPES));
+    this.setState({ activeRecipe: null, recipes: DEFAULT_RECIPES});
+  }
+  
+  onDeleteRecipe(e) {
+    const id = e.currentTarget.dataset.id;
+    const recipeName = this.state.recipes[id].name;
+    const warningAction = {
+      name: `Delete ${recipeName}`,
+      description: `delete the recipe for ${recipeName}`,
+      function: this.deleteRecipe.bind(null, id),
+    }
+    this.setState({ warningAction });
+    
+    $('#WarningModal').modal('show');
+  }
+  
+  deleteRecipe(id) {
+    const recipes = Object.assign({}, this.state.recipes);
+    delete recipes[id];
+    this.setState({ recipes });
+  }
+  
+  addRecipe() {
+    const recipeIds = Object.keys(this.state.recipes);
+    
+    const id = recipeIds.reduce((acc, val) => {
+      const intVal = parseInt(val);
+      if (intVal >= acc) acc = intVal + 1;
+      return acc;
+    }, 0);
+    
+    const name = '';
+    const ingredients = [];
+    
+    const newRecipe = { [id]: {id, name, ingredients} };
+    const recipes = Object.assign({}, this.state.recipes, newRecipe);
+    this.setState({ activeRecipe: id, recipes });
+  }
+  
+  renderRecipes() {
+    const recipeList = [];
+    const recipes = this.state.recipes;
+    
+    for (const key in recipes) {
+      const active = this.state.activeRecipe == key;
+      recipeList.push((
+        <Recipe
+          onUpdateRecipe={this.onUpdateRecipe}
+          onClick={this.onClickRecipe}
+          active={active}
+          recipe={recipes[key]}
+          onDelete={this.onDeleteRecipe}
+          />
+      ));
+    }
+    
+    return recipeList;
+  }
+  
+  render() {
+    return (
+      <div className="container-fluid clearfix">
+        <h1>Recipe Box</h1>
+        {this.renderRecipes()}
+        <button
+          type="button"
+          className="btn btn-success"
+          title="Add a New Recipe"
+          onClick={this.addRecipe}
+        >
+          <i className="fa fa-plus"></i>
+          New Recipe
+        </button>
+        <button
+          type="button"
+          className="btn btn-warning float-right"
+          title="Reset All Recipes"
+          onClick={this.onReset}
+        >
+          <i className="fa fa-trash-o"></i>
+          Reset Recipes
+        </button>
+        <WarningModal action={this.state.warningAction} />
+      </div>
+    );
+  }
+}
+
+/* components/Recipe.jsx */
+class Recipe extends Component {
+  constructor(props) {
+    super(props);
+    this.onClickEdit = this.onClickEdit.bind(this);
+    this.onSubmit = this.onSubmit.bind(this);
+    this.renderIngredients = this.renderIngredients.bind(this);
+    this.cardTitle = this.cardTitle.bind(this);
+  }
+  
+  cardTitle() {
+    if (this.props.recipe.name) {
+      return this.props.recipe.name;
+    } else {
+      return (
+        <i className="noname text-muted">
+          {`recipe #${this.props.recipe.id}`}
+        </i>
+      );
+    }
+  }
+  
+  componentDidMount() {
+    // If the name of the recipe isn't set, show and focus the edit field
+    if (this.props.active && !this.props.recipe.name.length) {
+      const header = document.querySelector('.recipe.active header')
+      const input = header.querySelector('.recipeName');
+      header.classList.add('edit');
+      input.focus();
+    }
+  }
+  
+  render() {
+    const recipe = this.props.recipe;
+    const active = this.props.active;
+    
+    return (
+      <div
+        className={`recipe card ${active ? 'active' : ''}`}
+        data-id={recipe.id}
+        onClick={this.props.onClick}
+      >
+        <div className="card-block">
+          <header>
+            <h2 className="card-title">{this.cardTitle()}</h2>
+            <form
+              onSubmit={this.onSubmit}
+              onChange={this.props.onUpdateRecipe}
+              data-action="updateName"
+            >
+              <input
+                className="form-control recipeName"
+                type="text"
+                value={recipe.name}
+                tabIndex="1"
+                onBlur={this.onSubmit}
+              />
+            </form>
+            <div className="btn-group">
+              <button
+                onClick={this.onClickEdit}
+                className="btn btn-primary"
+                title="Edit the Name"
+                type="button"
+                tabIndex="0"
+              >
+                <i className="fa fa-pencil"></i>
+              </button>
+              <button
+                className="btn btn-danger"
+                data-id={recipe.id}
+                title="Delete This Recipe"
+                type="button"
+                tabIndex="0"
+                onClick={this.props.onDelete}
+              >
+                <i className="fa fa-times"></i>
+              </button>
+            </div>
+          </header>
+          
+          <div className="ingredients">
+            <h3 className="card-subtitle text-muted">Ingredients:</h3>
+            {this.renderIngredients()}
+          </div>
+        </div>
+        
+        <newRecipeModal />
+      </div>
+    );
+  }
+  
+  onClickEdit(e) {
+    const id = this.props.recipe.id;
+    const header = document.querySelector(`.recipe[data-id="${id}"] header`);
+    const input = header.querySelector('input');
+    header.classList.add('edit');
+    input.focus();
+  }
+  
+  onSubmit(e) {
+    e.preventDefault();
+    const id = this.props.recipe.id;
+    const header = document.querySelector(`.recipe[data-id="${id}"] header`);
+    header.classList.remove('edit');
+  }
+  
+  renderIngredients() {
+    const ingredients = this.props.recipe.ingredients;
+    const ingredientList = ingredients.map((ingredient, i) => {
+      return (
+        <li className="list-group-item">
+          {ingredient}
+          <button
+            data-index={i}
+            className="btn btn-danger"
+            onClick={this.props.onUpdateRecipe}
+            data-action="deleteIngredient"
+            title="Delete This Ingredient"
+            type="button"
+          >
+            <i className="fa fa-times"></i>
+          </button>
+        </li>
+      );
+    });
+    
+    return (
+      <ul className="list-group">
+        {ingredientList}
+        <li className="list-group-item">
+          <form
+            data-action="addIngredient"
+            onSubmit={this.props.onUpdateRecipe}
+          >
+            <div className="input-group">
+              <input
+                type="text"
+                className="form-control"
+                placeholder="Add an ingredient"
+                tabIndex="1"
+              />
+              <span className="input-group-btn">
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  title="Add This Ingredient"
+                >
+                  <i className="fa fa-plus"></i>
+                </button>
+              </span>
+            </div>
+          </form>
+        </li>
+      </ul>
+    );
+  }
+}
+
+/* components/WarningModal.jsx */
+class WarningModal extends Component {
+  render() {
+    const action = this.props.action;
+    return (
+      <div
+        className="modal fade"
+        id="WarningModal"
+        tabIndex="-1"
+        role="dialog"
+        aria-hidden="true"
+      >
+        <div className="modal-dialog" role="document">
+          <div className="modal-content">
+            
+            <div className="modal-header">
+              <h2 className="modal-title">{action.name}?</h2>
+              <button type="button" className="close" data-dismiss="modal" aria-label="Close">
+                <i className="fa fa-times" aria-hidden="true"></i>
+              </button>
+            </div>
+            
+            <div className="modal-body">
+              Are you sure you want to {action.description}?
+            </div>
+            
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                data-dismiss="modal"
+              >Cancel</button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                data-dismiss="modal"
+                onClick={action.function}
+              >Okay</button>
+            </div>
+            
+          </div>
+        </div>
+      </div>
+    );
+  }
+}
+
+ReactDOM.render(
+  <App />
+, document.getElementById('app'));
